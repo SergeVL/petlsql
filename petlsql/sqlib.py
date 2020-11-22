@@ -59,6 +59,7 @@ def BOOL(v):
     elif v is not None:
         return bool(v)
 
+
 def COALESCE(rec, *args):
     for arg in args:
         try:
@@ -147,6 +148,13 @@ def LIST_DISTINCT(values):
     return list(set(filter(None, values)))
 
 
+def AGGREGATOR(cls, values):
+    r = cls()
+    for i in values:
+        r.step(i)
+    return r.finalize()
+
+
 def BETWEEN(value, A, B):
     if value is not None:
         return value >=A and value <= B
@@ -203,3 +211,4 @@ def DISTINCTFROM(A, B):
 
 def NOTDISTINCTFROM(A, B):
     return A == B
+

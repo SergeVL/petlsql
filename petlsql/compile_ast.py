@@ -185,11 +185,20 @@ def _(ast, **kwargs):
 
 @comp.register(Function)
 def _(ast, **kwargs):
-    if isinstance(ast.id, PyVar):
-        id = ast.id.val
         #FIXME check signature if ast.id.code
-    args = [comp(arg, **kwargs) for arg in ast.args]
-    return Expression('{}({})'.format(id, ', '.join(args)))
+    if isinstance(ast.id, PyVar):
+        func = ast.id.val
+        args = [comp(arg, **kwargs) for arg in ast.args]
+        if is_aggregate(ast):
+            if len(args) == 1:
+                arg = args[0]
+            else:
+                arg = "[{}]".format(', '.join(args))
+            src = 'sqlib.AGGREGATOR({}, [{} for rec in rows])'.format(func, arg)
+            return compile_function(kwargs['compiler'], "r{}".format(id(ast)), src, arg='rows')
+        else:
+            return Expression('{}({})'.format(func, ', '.join(args)))
+
 
 
 @comp.register(PyVar)
@@ -258,7 +267,7 @@ def _(ast, compiler=None, **kwargs):
     return Expression("sqlib.CHECK{}(rec, {}, {})".format("" if ast.is_true else "NOT", f, ast.val))
 
 
-@comp.register(Aggregate)
+@comp.register(AggregateFunc)
 def _(ast, **kwargs):
     arg = comp(ast.arg, **kwargs)
     funcname = ast.func.name

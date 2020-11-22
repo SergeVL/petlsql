@@ -139,6 +139,7 @@ def _(ast, f, compiler, **kwargs):
         var.done = True
         aggregates.append(val)
         # print("g var:", var, val)
+    # print(aggregates, args)
     args['reducer'] = partial(_reducer, aggragates=aggregates)
     return partial(reducer_execute, f, **args)
 

@@ -90,7 +90,8 @@ class Compiler:
             # print("f2:", f)
         if ast.groupby:
             f = plan(ast.groupby, f=f, **kwargs)
-        f = plan(ast.columns, f=f, **kwargs)
+        else:
+            f = plan(ast.columns, f=f, **kwargs)
         if ast.orders:
             f = plan(ast.orders, f=f, **kwargs)
         if ast.distinct:

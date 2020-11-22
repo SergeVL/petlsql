@@ -1,5 +1,6 @@
 from enum import Enum
 import petl as etl
+from .. import Aggregator
 
 class SQLError(Exception):
     pass
@@ -35,7 +36,7 @@ class Trim(Enum):
     BOTH = 2
 
 
-class Aggregator(Enum):
+class Aggregate(Enum):
     COUNT = 0
     AVG = 1
     MAX = 2
@@ -471,7 +472,7 @@ class SearchedSwitch:
         self.elsevalue = None
 
 
-class Aggregate:
+class AggregateFunc:
     _fields = ("arg", "selector")
     def __init__(self, func, distinct, arg, selector=None):
         self.func = func
@@ -496,14 +497,16 @@ class SQLFunction:
     def __repr__(self):
         return f"SQLFunc<{self.id}>"
 
+
 class Param:
     def __init__(self,id):
         self.id = id
 
 
 def is_aggregate(ast):
-    return isinstance(ast, Aggregate)
-
+    return isinstance(ast, AggregateFunc) \
+        or (isinstance(ast, Function) and isinstance(ast.id, PyVar) \
+            and issubclass(ast.id.code, Aggregator))
 
 
 class _Stopper:

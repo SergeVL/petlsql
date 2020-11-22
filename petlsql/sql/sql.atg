@@ -97,7 +97,7 @@ selectItem
 .
 
 aggregateFunction<out val>
-(. d = False; f = ast.Aggregator.COUNT .) =
+(. d = False; f = ast.Aggregate.COUNT .) =
  (
    "COUNT" '(' 
      (
@@ -106,17 +106,17 @@ aggregateFunction<out val>
      )
    ')' 
  | 
-   (  "AVG" (. f = ast.Aggregator.AVG .)
-    | "MAX" (. f = ast.Aggregator.MAX .)
-    | "MIN" (. f = ast.Aggregator.MIN .)
-    | "SUM" (. f = ast.Aggregator.SUM .)
+   (  "AVG" (. f = ast.Aggregate.AVG .)
+    | "MAX" (. f = ast.Aggregate.MAX .)
+    | "MIN" (. f = ast.Aggregate.MIN .)
+    | "SUM" (. f = ast.Aggregate.SUM .)
    )
    '(' [ setQuantifier<out d> ] valueLitteral<out val> ')' 
  |
-    "LIST" (. f = ast.Aggregator.LIST .)
+    "LIST" (. f = ast.Aggregate.LIST .)
    '(' [ setQuantifier<out d> ] valueList<out val> ')'
  )
- (. val = ast.Aggregate(f, d, val) .)
+ (. val = ast.AggregateFunc(f, d, val) .)
  [ filterClause<out cond> (. val.selector = cond .) ]
 .
 

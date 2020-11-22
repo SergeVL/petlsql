@@ -410,7 +410,7 @@ class Parser( object ):
       return val
 
    def aggregateFunction( self ):
-      d = False; f = ast.Aggregator.COUNT 
+      d = False; f = ast.Aggregate.COUNT 
       if self.la.kind == 21:
          self.Get( )
          self.Expect(9)
@@ -427,16 +427,16 @@ class Parser( object ):
       elif self.StartOf(10):
          if self.la.kind == 22:
             self.Get( )
-            f = ast.Aggregator.AVG 
+            f = ast.Aggregate.AVG 
          elif self.la.kind == 23:
             self.Get( )
-            f = ast.Aggregator.MAX 
+            f = ast.Aggregate.MAX 
          elif self.la.kind == 24:
             self.Get( )
-            f = ast.Aggregator.MIN 
+            f = ast.Aggregate.MIN 
          else:
             self.Get( )
-            f = ast.Aggregator.SUM 
+            f = ast.Aggregate.SUM 
          self.Expect(9)
          if (self.la.kind == 19 or self.la.kind == 20):
             d = self.setQuantifier()
@@ -444,7 +444,7 @@ class Parser( object ):
          self.Expect(10)
       elif self.la.kind == 26:
          self.Get( )
-         f = ast.Aggregator.LIST 
+         f = ast.Aggregate.LIST 
          self.Expect(9)
          if (self.la.kind == 19 or self.la.kind == 20):
             d = self.setQuantifier()
@@ -452,7 +452,7 @@ class Parser( object ):
          self.Expect(10)
       else:
          self.SynErr(114)
-      val = ast.Aggregate(f, d, val) 
+      val = ast.AggregateFunc(f, d, val) 
       if (self.la.kind == 27):
          cond = self.filterClause()
          val.selector = cond 
