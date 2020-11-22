@@ -1,9 +1,11 @@
+import inspect
 from collections.abc import Iterable
 import importlib as im
 import petl as etl
 from pathlib import Path
 from urllib.parse import urlparse
 
+from . import Aggregator
 from . import sqlib
 from .sql.ast import PyVar, Identifier, View
 from.virtsql import compile, execute, SQLError
@@ -177,6 +179,12 @@ class VirtualDB:
         if path.is_file():
             src = path.read_text()
             exec(src, self.globals)
+
+    def function(self, f, name=None):
+        if inspect.isfunction(f) or (inspect.isclass(f) and issubclass(f, Aggregator)):
+            if name is None:
+                name = f.__name__
+            self.globals[name] = f
 
     def print(self, sql, title=None, limit=10):
         try:

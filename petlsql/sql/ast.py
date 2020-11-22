@@ -504,10 +504,12 @@ class Param:
 
 
 def is_aggregate(ast):
-    return isinstance(ast, AggregateFunc) \
-        or (isinstance(ast, Function) and isinstance(ast.id, PyVar) \
-            and issubclass(ast.id.code, Aggregator))
-
+    try:
+        return isinstance(ast, AggregateFunc) \
+            or (isinstance(ast, Function) and isinstance(ast.id, PyVar) \
+                and issubclass(ast.id.code, Aggregator))
+    except:
+        return False
 
 class _Stopper:
     __slots__ = ('stop', 'follow', 'post_proc')
