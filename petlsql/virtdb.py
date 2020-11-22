@@ -8,7 +8,8 @@ from urllib.parse import urlparse
 from . import Aggregator
 from . import sqlib
 from .sql.ast import PyVar, Identifier, View
-from.virtsql import compile, execute, SQLError
+from .virtsql import compile, execute, SQLError
+from .run import filter_keys
 
 
 __all__ = ("VirtualDB",)
@@ -51,7 +52,7 @@ class DirectoryDB:
                 args.update(str2dict(query))
         return View(path, extractor, path, **args)
 
-    def load_data(self, data, path, append=False, **kwargs):
+    def load_data(self, data, path, **kwargs):
         if path.startswith('/'):
             if self.skip_root:
                 return
@@ -59,12 +60,10 @@ class DirectoryDB:
         else:
             path = self.path / path
         ext = path.suffix[1:]
-        # if '.' in tablename:
-        #     schema, tablename = tablename.split('.', 1)
-        #     kwargs["schema"] = schema
-        #
-        # f = etl.appenddb if append else etl.todb
-        # return f(data, lambda: self.loadcursor(self.conn), tablename, **kwargs)
+        loader = self._ext_.get(ext)[1]
+        if loader:
+            kwargs.update(self.config.get(ext, {}))
+            return loader(data, path, **kwargs)
 
 
 class DB:
@@ -242,12 +241,35 @@ class VirtualDB:
         VirtualDB._drivers[name] = dcls
 
     @staticmethod
-    def register_file_loader(name, extractor, loader):
+    def register_file_driver(name, extractor, loader):
         DirectoryDB._ext_[name] = extractor, loader
 
 
 VirtualDB.register_db_driver("file", DirectoryDB)
-VirtualDB.register_file_loader("csv", etl.fromcsv, etl.tocsv)
+
+
+def tocsv(data, target, append, **kwargs):
+    kwargs = filter_keys(kwargs, ("encoding", "errors", "write_header", "dialect",
+                                  "delimiter", "quotechar", "escapechar", "doublequote", "skipinitialspace",
+                                  "lineterminator", "quoting"))
+    if append:
+        return etl.appendcsv(data, target, **kwargs)
+    else:
+        return etl.tocsv(data, target, **kwargs)
+
+
+VirtualDB.register_file_driver("csv", etl.fromcsv, tocsv)
+
+
+def topickle(data, target, append, **kwargs):
+    kwargs = filter_keys(kwargs, ("protocol", "write_header"))
+    if append:
+        return etl.appendpickle(data, target, **kwargs)
+    else:
+        return etl.topickle(data, target, **kwargs)
+
+
+VirtualDB.register_file_driver("pickle", etl.frompickle, topickle)
 
 
 def path_from_url(url):

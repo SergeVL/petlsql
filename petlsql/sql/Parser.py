@@ -256,6 +256,7 @@ class Parser( object ):
       return val
 
    def Ident( self ):
+      id = None 
       if self.la.kind == 1:
          self.Get( )
          id = self.getCasesensitiveTokenValue(self.token)     
@@ -335,15 +336,15 @@ class Parser( object ):
       self.context.set_group_by(vars) 
 
    def orderList( self ):
-      asc = True 
+      desc = False 
       vars = self.nameList()
       if (self.la.kind == 62 or self.la.kind == 63):
          if self.la.kind == 62:
             self.Get( )
          else:
             self.Get( )
-            asc = False 
-      self.context.set_order_by(vars, asc) 
+            desc = True 
+      self.context.set_order_by(vars, desc) 
 
    def selectItem( self ):
       id,val = None,None 
@@ -355,7 +356,12 @@ class Parser( object ):
          self.SynErr(109)
       if (self.la.kind == 8):
          self.Get( )
-         id = self.Ident()
+         if self.la.kind == 1 or self.la.kind == 2:
+            id = self.Ident()
+         elif self.la.kind == 6:
+            id = self.String()
+         else:
+            self.SynErr(110)
       self.context.addColumn(id, val) 
 
    def valueLitteral( self ):
@@ -381,7 +387,7 @@ class Parser( object ):
             self.Get( )
             val = float(self.token.val) 
          else:
-            self.SynErr(110)
+            self.SynErr(111)
          val = sign * val 
       elif self.la.kind == 6:
          val = self.String()
@@ -401,12 +407,12 @@ class Parser( object ):
             val = self.valueExpr()
             val = ast.BracesExpr(val) 
          else:
-            self.SynErr(111)
+            self.SynErr(112)
          self.Expect(10)
       elif self.la.kind == 3:
          val = self.SQLParameter()
       else:
-         self.SynErr(112)
+         self.SynErr(113)
       return val
 
    def aggregateFunction( self ):
@@ -422,7 +428,7 @@ class Parser( object ):
                d = self.setQuantifier()
             val = self.valueLitteral()
          else:
-            self.SynErr(113)
+            self.SynErr(114)
          self.Expect(10)
       elif self.StartOf(10):
          if self.la.kind == 22:
@@ -451,11 +457,16 @@ class Parser( object ):
          val = self.valueList()
          self.Expect(10)
       else:
-         self.SynErr(114)
+         self.SynErr(115)
       val = ast.AggregateFunc(f, d, val) 
       if (self.la.kind == 27):
          cond = self.filterClause()
          val.selector = cond 
+      return val
+
+   def String( self ):
+      self.Expect(6)
+      val = self.getCasesensitiveTokenValue(self.token)[1:-1] 
       return val
 
    def valueList( self ):
@@ -485,7 +496,7 @@ class Parser( object ):
       elif self.la.kind == 6:
          tblname = self.String()
       else:
-         self.SynErr(115)
+         self.SynErr(116)
       if (self.la.kind == 8):
          self.Get( )
          id = self.Ident()
@@ -505,7 +516,7 @@ class Parser( object ):
          self.Expect(10)
          val = ast.JoinUsing(columns) 
       else:
-         self.SynErr(116)
+         self.SynErr(117)
       return val
 
    def NameList( self ):
@@ -516,11 +527,6 @@ class Parser( object ):
          id = self.Name()
          val.append(id) 
 
-      return val
-
-   def String( self ):
-      self.Expect(6)
-      val = self.getCasesensitiveTokenValue(self.token)[1:-1] 
       return val
 
    def boolTerm( self ):
@@ -582,7 +588,7 @@ class Parser( object ):
             val = self.valueLitteral()
             val = ast.StartingExpr(arg, val, is_true) 
          else:
-            self.SynErr(117)
+            self.SynErr(118)
       elif self.StartOf(13):
          val = self.compareExpr(arg)
       elif self.la.kind == 46:
@@ -598,9 +604,9 @@ class Parser( object ):
          elif self.StartOf(14):
             val = self.truthValue(is_true, arg)
          else:
-            self.SynErr(118)
+            self.SynErr(119)
       else:
-         self.SynErr(119)
+         self.SynErr(120)
       return val
 
    def betweenExpr( self, arg, is_true ):
@@ -640,7 +646,7 @@ class Parser( object ):
       elif self.la.kind == 12:
          self.selectColumnList()
       else:
-         self.SynErr(120)
+         self.SynErr(121)
       return val
 
    def compareExpr( self, arg ):
@@ -661,7 +667,7 @@ class Parser( object ):
          self.Get( )
          op = '!=' 
       else:
-         self.SynErr(121)
+         self.SynErr(122)
       if self.StartOf(5):
          v = self.valueLitteral()
          val = ast.CompareExpr(op, arg,v) 
@@ -674,7 +680,7 @@ class Parser( object ):
          val = self.sqlselect()
          self.Expect(10)
       else:
-         self.SynErr(122)
+         self.SynErr(123)
       return val
 
    def truthValue( self, is_true, arg ):
@@ -690,7 +696,7 @@ class Parser( object ):
       elif self.la.kind == 50:
          self.Get( )
       else:
-         self.SynErr(123)
+         self.SynErr(124)
       val = ast.Check(arg,is_true, v) 
       return val
 
@@ -795,7 +801,7 @@ class Parser( object ):
             args.append(l) 
          self.Expect(10)
       else:
-         self.SynErr(124)
+         self.SynErr(125)
       val = ast.SQLFunction(id, args) 
       return val
 
@@ -855,7 +861,7 @@ class Parser( object ):
          self.Get( )
          val = "DATETIME" 
       else:
-         self.SynErr(125)
+         self.SynErr(126)
       return val
 
    def procedureArgs( self ):
@@ -881,7 +887,7 @@ class Parser( object ):
          self.Get( )
          val = False 
       else:
-         self.SynErr(126)
+         self.SynErr(127)
       return val
 
    def caseExpr( self ):
@@ -890,7 +896,7 @@ class Parser( object ):
       elif self.la.kind == 83:
          val = self.searchedCase()
       else:
-         self.SynErr(127)
+         self.SynErr(128)
       if (self.la.kind == 82):
          self.Get( )
          elval = self.caseresult()
@@ -936,7 +942,7 @@ class Parser( object ):
       elif self.la.kind == 50:
          self.Get( )
       else:
-         self.SynErr(128)
+         self.SynErr(129)
       return val
 
    def simpleCase( self, cases ):
@@ -945,7 +951,7 @@ class Parser( object ):
       elif self.StartOf(11):
          ifv = self.compareOperand(None)
       else:
-         self.SynErr(129)
+         self.SynErr(130)
       self.Expect(84)
       thenv = self.caseresult()
       cases.append(ast.SimpleCase(ifv, thenv))  
@@ -1120,26 +1126,27 @@ class Parser( object ):
       107 : "invalid setQuantifier",
       108 : "invalid tableRefList",
       109 : "invalid selectItem",
-      110 : "invalid valueLitteral",
+      110 : "invalid selectItem",
       111 : "invalid valueLitteral",
       112 : "invalid valueLitteral",
-      113 : "invalid aggregateFunction",
+      113 : "invalid valueLitteral",
       114 : "invalid aggregateFunction",
-      115 : "invalid tableReference",
-      116 : "invalid joinSpecification",
-      117 : "invalid compareOperand",
+      115 : "invalid aggregateFunction",
+      116 : "invalid tableReference",
+      117 : "invalid joinSpecification",
       118 : "invalid compareOperand",
       119 : "invalid compareOperand",
-      120 : "invalid inExpr",
-      121 : "invalid compareExpr",
+      120 : "invalid compareOperand",
+      121 : "invalid inExpr",
       122 : "invalid compareExpr",
-      123 : "invalid truthValue",
-      124 : "invalid standartFunction",
-      125 : "invalid Type",
-      126 : "invalid BoolLiteral",
-      127 : "invalid caseExpr",
-      128 : "invalid caseresult",
-      129 : "invalid simpleCase",
+      123 : "invalid compareExpr",
+      124 : "invalid truthValue",
+      125 : "invalid standartFunction",
+      126 : "invalid Type",
+      127 : "invalid BoolLiteral",
+      128 : "invalid caseExpr",
+      129 : "invalid caseresult",
+      130 : "invalid simpleCase",
       }
 
 

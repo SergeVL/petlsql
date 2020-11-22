@@ -242,8 +242,8 @@ class SelectAst:
     def set_where(self, cond):
         self.selector = WhereAst(cond)
 
-    def set_order_by(self, vars, asc):
-        self.orders = OrderBy(vars, asc)
+    def set_order_by(self, vars, desc):
+        self.orders = OrderBy(vars, desc)
 
     def addParam(self, paramId):
         r = self.params.get(paramId)
@@ -335,9 +335,9 @@ class GroupBy:
 class OrderBy:
     _fields = ("items",)
 
-    def __init__(self, items, asc=True):
+    def __init__(self, items, desc=False):
         self.items = items
-        self.asc = asc
+        self.desc = desc
 
     def __str__(self):
         return "ORDER BY {} {}".format(', '.join(map(str,self.items)), "ASC" if self.asc else "DESC")

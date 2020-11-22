@@ -62,22 +62,23 @@ def _(ast, f, **kwargs):
     fselect = compile_ast(ast, **kwargs)
     args = dict(selector=fselect)
     if ast.deps:
-        print("plan Where:", ast.deps)
+        # print("plan Where:", ast.deps)
         vs = compile_vars(ast.deps, **kwargs)
         if vs:
             args['addfields'] = vs
+        # print("sel:", vs, ast.deps, kwargs['header'])
     f = partial(select_execute, f, **args)
     return f
 
 @plan.register(Columns)
-def _(ast, compiler, f, **kwargs):
-    if ast.deps:
-        print("plan Columns:", ast.deps)
+def _(ast, compiler, f, header, **kwargs):
+    # if ast.deps:
+        # print("plan Columns:", ast.deps, header)
     fields = OrderedDict()
     tc = []
     for c in ast:
-        if c.done:
-            continue
+        # if c.done:
+        #     continue
         v = c.value
         if isinstance(v, Column):
             # tec = v.name, v.alias
@@ -88,7 +89,10 @@ def _(ast, compiler, f, **kwargs):
         else:
             if not is_aggregate(v):
                 # print("c?:", v, c.done)
-                v = compile_ast(v, compiler)
+                if c.name in header:
+                    v = c.name
+                else:
+                    v = compile_ast(v, compiler)
         fields[c.name] = v
     # print("cs?:", fields)
     if fields:
@@ -147,11 +151,12 @@ def _(ast, f, compiler, **kwargs):
 @plan.register(OrderBy)
 def _(ast, f, compiler, **kwargs):
     key = []
+    args = dict(key=key, reverse=ast.desc)
     for k in ast.items:
         name = k.name
         # print("order:", type(k), k, k.name)
         key.append(name)
-    return partial(sort_execute, f, key=key)
+    return partial(sort_execute, f, **args)
     return f
 
 
@@ -159,11 +164,9 @@ def compile_vars(vars, compiler, header, **kwargs):
     fields = []
     tc = []
     for var in vars:
-        if var.done:
-            continue
         name = var.name
         if name in header:
-            print(f"var {name} alredy exist")
+            # print(f"var {name} alredy exist")
             continue
         val = var.value
         if isinstance(val, Column):

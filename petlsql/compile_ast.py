@@ -185,7 +185,7 @@ def _(ast, **kwargs):
 
 @comp.register(Function)
 def _(ast, **kwargs):
-        #FIXME check signature if ast.id.code
+    #FIXME check signature if ast.id.code
     if isinstance(ast.id, PyVar):
         func = ast.id.val
         args = [comp(arg, **kwargs) for arg in ast.args]
@@ -196,10 +196,12 @@ def _(ast, **kwargs):
                 arg = "[{}]".format(', '.join(args))
             src = 'sqlib.AGGREGATOR({}, [{} for rec in rows])'.format(func, arg)
             return compile_function(kwargs['compiler'], "r{}".format(id(ast)), src, arg='rows')
-        else:
-            return Expression('{}({})'.format(func, ', '.join(args)))
+        return Expression('{}({})'.format(func, ', '.join(args)))
 
 
+@comp.register(Var)
+def _(ast, **kwargs):
+    return comp(ast.value, **kwargs)
 
 @comp.register(PyVar)
 def _(ast, **kwargs):

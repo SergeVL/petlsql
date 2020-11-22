@@ -155,6 +155,36 @@ class Scanner(object):
       line0 = self.line
       lineStart0 = self.lineStart
       self.NextCh()
+      if self.ch == '*':
+         self.NextCh()
+         while True:
+            if self.ch == '*':
+               self.NextCh()
+               if self.ch == '/':
+                  level -= 1
+                  if level == 0:
+                     self.oldEols = self.line - line0
+                     self.NextCh()
+                     return True
+                  self.NextCh()
+            elif self.ch == Buffer.EOF:
+               return False
+            else:
+               self.NextCh()
+      else:
+         if self.ch == Scanner.EOL:
+            self.line -= 1
+            self.lineStart = lineStart0
+         self.pos = self.pos - 2
+         self.buffer.setPos(self.pos+1)
+         self.NextCh()
+      return False
+
+   def Comment1(self):
+      level = 1
+      line0 = self.line
+      lineStart0 = self.lineStart
+      self.NextCh()
       if self.ch == '/':
          self.NextCh()
          while True:
@@ -348,7 +378,7 @@ class Scanner(object):
    def NextToken( self ):
       while ord(self.ch) in self.ignore:
          self.NextCh( )
-      if (self.ch == '/' and self.Comment0()):
+      if (self.ch == '/' and self.Comment0() or self.ch == '/' and self.Comment1()):
          return self.NextToken()
 
       self.t = Token( )

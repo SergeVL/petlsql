@@ -41,6 +41,13 @@ def join_execute(cl, cr, join, **kwargs):
     return c
 
 
+def addfields_execute(c, addfields={}, **kwargs):
+    r = c()
+    if addfields:
+        r = etl.addfields(r, addfields)
+    return r
+
+
 def fieldmap_execute(c, fieldmap={}, **kwargs):
     r = c()
     if fieldmap:
@@ -65,7 +72,8 @@ def reducer_execute(c, **kwargs):
 
 def sort_execute(c, **kwargs):
     r = c()
-    r = etl.sort(r, key=kwargs['key'])
+    kwargs = filter_keys(kwargs, ("key", "reverse"))
+    r = etl.sort(r, **kwargs)
     return r
 
 def unique_execute(c):

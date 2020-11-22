@@ -22,6 +22,7 @@ TOKENS
     string = ('\'' { stringChar | "\\'"  }'\'')| ('"' { stringChar1 | "\\\"" }'"').
     
 COMMENTS FROM "//" TO '\n'
+COMMENTS FROM "/*" TO '*/'
 IGNORE '\t' + '\r' + '\n'
 
 PRODUCTIONS
@@ -92,7 +93,7 @@ selectItem
    valueLitteral<out val>
  | aggregateFunction<out val>
  )
- ["AS" Ident<out id> ]
+ ["AS" (Ident<out id> | String<out id>) ]
  (. self.context.addColumn(id, val) .)
 .
 
@@ -293,13 +294,13 @@ groupList =
   nameList<out vars> (. self.context.set_group_by(vars) .)
 .
 
-orderList (. asc = True .) =
+orderList (. desc = False .) =
   nameList<out vars>
   [
     "ASC"
-    | "DESC" (. asc = False .)
+    | "DESC" (. desc = True .)
   ]
-  (. self.context.set_order_by(vars, asc) .)
+  (. self.context.set_order_by(vars, desc) .)
 .
 
 
@@ -446,7 +447,7 @@ Name<out id> =
   (. id = ast.Identifier(id) .)
 .
 
-Ident<out id> =
+Ident<out id> (. id = None .)=
     ident    (. id = self.getCasesensitiveTokenValue(self.token)     .)
   | fixident (. id = self.getCasesensitiveTokenValue(self.token)[1:] .)
 .
