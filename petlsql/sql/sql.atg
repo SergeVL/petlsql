@@ -1,0 +1,472 @@
+COMPILER sql
+
+IGNORECASE
+CHARACTERS
+
+  digit     = "0123456789" .
+  letter    = 'a'..'z'+'_' .
+  newLine = '\r' + '\n'.
+  stringChar  = ANY - "'" - newLine.
+  stringChar1 = ANY - '"' - newLine.
+  InString  = ANY - '"' - newLine .
+  quote = '"'.
+  escapechar = '\\' + quote.
+  nonquote = ANY - '"' - escapechar.
+
+TOKENS
+    ident   =   letter {letter | digit | '_'}. 
+    fixident =  '$'letter {letter | digit | '_'}.
+    paramId = '?' letter {letter | digit | '_'}.
+    integer = digit { digit } . 
+    float   = digit { digit } "." { digit } . 
+    string = ('\'' { stringChar | "\\'"  }'\'')| ('"' { stringChar1 | "\\\"" }'"').
+    
+COMMENTS FROM "//" TO '\n'
+IGNORE '\t' + '\r' + '\n'
+
+PRODUCTIONS
+
+sql (. val, withc, names = None, None, None .) =
+ (. self.context = None .)
+ { "WITH" Name<out name> [ columnNames<out names> ]
+   "AS" '('
+   sqlselect<out val>
+     (.
+      if names:
+        val.set_header(names)
+      if withc is None:
+          withc = ast.WithContext()
+      withc.addView(name, val)
+     .)
+   ')'
+ }
+ sqlselect<out val>
+ (.
+   val.withcontext = withc
+   self.result = val
+ .)
+ EOF
+.
+
+columnNames<out names> (. names = [] .)=
+ '('
+   Ident<out id>        (. names.append(id) .)
+   { ',' Ident<out id>  (. names.append(id) .)
+   }
+ ')'
+.
+
+sqlselect<out val> =
+ "SELECT"
+ (. 
+    oldcontext = self.context
+    val = self.context = ast.SelectAst()
+    val.parent = oldcontext
+ .)
+ [ setQuantifier<out d> (. val.distinct = d .)
+ ]
+ (
+    '*' (. val.allColumns() .)
+  | selectList
+ )
+ "FROM" tableRefList<out tbl>
+  (. val.source = tbl .)
+ [ "WHERE" searchCondition<out cond> (. val.set_where(cond) .) ]
+ [ "GROUP" "BY" groupList ]
+ [ "ORDER" "BY" orderList ] 
+ (. self.context = oldcontext .)
+.
+
+setQuantifier<out distinct> =
+   "DISTINCT" (. distinct = True .)
+ | "ALL"      (. distinct = False .)
+.
+
+selectList =
+ selectItem { ',' selectItem } 
+.
+
+selectItem
+(. id,val = None,None .) =
+ (
+   valueLitteral<out val>
+ | aggregateFunction<out val>
+ )
+ ["AS" Ident<out id> ]
+ (. self.context.addColumn(id, val) .)
+.
+
+aggregateFunction<out val>
+(. d = False; f = ast.Aggregator.COUNT .) =
+ (
+   "COUNT" '(' 
+     (
+        '*' (. val = None .)
+      | [ setQuantifier<out d> ] valueLitteral<out val>
+     )
+   ')' 
+ | 
+   (  "AVG" (. f = ast.Aggregator.AVG .)
+    | "MAX" (. f = ast.Aggregator.MAX .)
+    | "MIN" (. f = ast.Aggregator.MIN .)
+    | "SUM" (. f = ast.Aggregator.SUM .)
+   )
+   '(' [ setQuantifier<out d> ] valueLitteral<out val> ')' 
+ |
+    "LIST" (. f = ast.Aggregator.LIST .)
+   '(' [ setQuantifier<out d> ] valueList<out val> ')'
+ )
+ (. val = ast.Aggregate(f, d, val) .)
+ [ filterClause<out cond> (. val.selector = cond .) ]
+.
+
+filterClause<out val> =
+ "FILTER" '(' "WHERE" searchCondition<out val> ')'
+.
+
+valueList<out val> =
+ valueLitteral<out val>
+ { ',' valueLitteral<out v>
+ (.
+    if not isinstance(val, list):
+        val = [val]
+    val.append(v)
+ .)
+ }
+.
+
+tableRefList<out val> (. joinType = ast.Join.INNER .) =
+ tableReference<out val>
+ {
+    [ 
+      "INNER"
+    | ( "LEFT"    (. joinType = ast.Join.LEFT .)
+      | "RIGHT"   (. joinType = ast.Join.RIGHT .)
+      | "FULL" [ "OUTER"] (. joinType = ast.Join.FULL .)
+      )
+    ] "JOIN" tableReference<out t>
+    joinSpecification<out join>
+    (. val = ast.JoinCursor(val,t,joinType, join) .)
+   | ',' tableReference<out t>
+     (. val = ast.JoinCursor(val, t, ast.Join.UNION) .)
+ }
+.
+
+joinSpecification<out val> (. val =None .)=
+   "ON" searchCondition<out cond>
+   (. val = ast.JoinCondition(cond) .)
+ | "USING" '(' NameList<out columns> ')'
+   (. val = ast.JoinUsing(columns) .)
+.
+
+NameList<out val> =
+ Name<out id>
+ (. val = [id] .)
+ {
+   ',' Name<out id>
+   (. val.append(id) .)
+ }
+.
+
+tableReference<out tbl>
+(. id, tblname = '', '' .) =
+ (
+    Name<out tblname>
+  | String<out tblname>
+ )
+ ["AS" Ident<out id> ]
+ (. tbl = ast.Table(tblname, id) .)
+.
+
+searchCondition<out val> (. vals = [] .) =
+  boolTerm<out val>
+  { "OR" boolTerm<out v>
+    (. 
+        if not vals: vals.append(val)
+        vals.append(v)
+    .)
+  }
+  (. if vals: val = ast.ConditionExpr('or', vals) .)
+.
+
+boolTerm<out val> (. vals = [] .) =
+  boolFactor<out val>
+  { "AND" boolFactor<out v>
+    (. 
+        if not vals: vals.append(val)
+        vals.append(v)
+    .)
+  }
+  (. if vals: val = ast.ConditionExpr('and',vals) .)
+.
+
+
+boolFactor<out val> (. neg = False .) = 
+  [ "NOT" (. neg = True .)] 
+  primaryCondition<out val>
+  (. if neg: val = ast.Negation(val) .)
+.
+
+
+primaryCondition<out val> =
+   valueLitteral<out val>
+   [compareOperand<out val,val>]
+.
+
+compareOperand<out val,arg> (. is_true = True .) =
+  ( ["NOT" (. is_true = False .) ]
+    (
+       "BETWEEN" betweenExpr<out val,arg, is_true>
+     | "LIKE" likeExpr<out val,arg,False, is_true>
+     | "SIMILAR" "TO" likeExpr<out val,arg,True, is_true>
+     | "IN" '(' inExpr<out val,arg, is_true> ')'
+     | "CONTAINING" valueLitteral<out val>       (. val = ast.ContainingExpr(arg,val, is_true) .)
+     | "STARTING" "WITH" valueLitteral<out val>  (. val = ast.StartingExpr(arg, val, is_true) .)
+    )
+  )
+  | compareExpr<out val,arg>
+  | "IS"
+    [ "NOT" (. is_true = False .) ]
+    (  "DISTINCT" "FROM" valueLitteral<out val> (. val = ast.DistinctFrom(is_true, arg, val) .)
+       | truthValue<out val, is_true, arg>
+    )
+.
+
+truthValue<out val, is_true, arg> (. v = None .) =
+ (
+   "TRUE"     (. v = True .)
+ | "FALSE"    (. v = False .)
+ | "UNKNOWN" 
+ | "NULL"
+ ) (. val = ast.Check(arg,is_true, v) .)
+.
+
+betweenExpr<out val,arg, is_true> (. symmetric = False .) =
+  [ 
+    "ASYMMETRIC"
+    | "SYMMETRIC" (. symmetric = True .)
+  ] 
+ valueLitteral<out v1> "AND" valueLitteral<out v2>
+ (. val = ast.BetweenExpr(symmetric, is_true, [arg, v1, v2]) .)
+.
+
+likeExpr<out val,arg,rex, is_true> (. esc = None .) =
+  String<out pat>
+  [ "ESCAPE" String<out val> (. esc = val .) ]
+  (. val = ast.LikeExpr(arg, pat, rex, is_true, esc) .)
+.
+
+inExpr<out val,arg, is_true> =
+  (
+    valueLitteral<out val> (. vals = [val] .) 
+    { ',' valueLitteral<out val> (. vals.append(val) .) }
+    (. val = ast.InExpr(arg, is_true, vals) .)
+  ) 
+  | selectColumnList
+.
+selectColumnList = sqlselect<out val> .
+
+compareExpr<out val,arg> (. op = '==' .) = 
+  (
+    '='
+    |('<'|'>'|"<="|">=") (. op = self.token.val .)
+    |"<>" (. op = '!=' .)
+  )
+  (
+      valueLitteral<out v>
+      (. val = ast.CompareExpr(op, arg,v) .)
+    |
+    ("SOME" | "ANY")
+    '(' 
+      sqlselect<out val>
+    ')'
+  )
+.
+
+nameList<out val> (. val = [] .) =
+  Name<out id>       (. val.append(id) .)
+  { ',' Name<out id> (. val.append(id) .)
+  }
+.
+
+groupList =
+  nameList<out vars> (. self.context.set_group_by(vars) .)
+.
+
+orderList (. asc = True .) =
+  nameList<out vars>
+  [
+    "ASC"
+    | "DESC" (. asc = False .)
+  ]
+  (. self.context.set_order_by(vars, asc) .)
+.
+
+
+standartFunction<out val> (. id, args = None, [] .) =
+ (
+    "ROW_NUMBER" '(' ')' (. id = ast.SqlFunc.ROW_NUMBER .)
+  | "CAST" '(' valueExpr<out v> "AS" Type<out type> ')'            (. id, args = ast.SqlFunc.CAST, [type, v] .)
+  | "NULLIF" '(' valueExpr<out v1> ','  valueExpr<out v2> ')'      (. id, args = ast.SqlFunc.NULLIF, [v1,v2] .)
+  | "COALESCE" '(' procedureArgs<out args>  ')'                    (. id = ast.SqlFunc.COALESCE; .)
+  | "SUBSTRING" '(' valueExpr<out v> ',' Int<out fromidx>          (. id, args = ast.SqlFunc.SUBSTRING, [v, fromidx] .)
+    [ ',' Int<out c> (. args.append(c) .)] ')'
+  | (   "UPPER"                                                    (. id = ast.SqlFunc.UPPER .)
+      | "LOWER"                                                    (. id = ast.SqlFunc.LOWER .)
+    ) '(' valueExpr<out v> (. args = [v] .)  ')'
+  | "TRIM" '('                                                     (. id, args = ast.SqlFunc.TRIM, [ast.Trim.BOTH]  .)
+     [   "LEADING" (. args[0] = ast.Trim.LEADING .)
+       | "TRAILING" (. args[0] = ast.Trim.TRAILING .)
+       | "BOTH"
+     ]
+     valueExpr<out v> (. args.append(v) .)
+     ["FROM" valueExpr<out v> (. args.append(v) .) ]
+    ')'
+  | "OVERLAY" '(' valueExpr<out v1>
+    "PLACING" valueExpr<out v2> "FROM" Int<out p>                   (. id, args = ast.SqlFunc.OVERLAY, [v1, v2, p] .)
+    [ "FOR" Int<out l> (. args.append(l) .) ] ')'
+ ) (. val = ast.SQLFunction(id, args) .)
+.
+
+valueLitteral<out val> (. val = None .) =
+   Name<out val>
+   [ '(' procedureArgs<out args> ')' 
+     (. val = ast.Function(val, args) .)   
+   ]
+ | (. sign = 1 .)[ '+'|'-' (. sign = -1 .) ]
+   (   Int<out val>
+     | float   (. val = float(self.token.val) .)
+   ) (. val = sign * val .)
+ | String<out val>
+ | BoolLiteral<out val>
+ | standartFunction<out val>
+ | "CASE" caseExpr<out val> "END"
+ | '('
+      (
+        scalarSubquery<out val>
+        | valueExpr<out val> (. val = ast.BracesExpr(val) .)
+      )
+   ')'
+ | SQLParameter<out val>
+.
+
+procedureArgs<out vals> =
+    valueExpr<out val> (. vals = [val] .)
+    { ',' valueExpr<out val> (. vals.append(val) .) 
+    } 
+.
+
+scalarSubquery<out val> = sqlselect<out val> .
+
+caseExpr<out val> = 
+  (
+    simpleSwitch<out val> | searchedCase<out val>
+  )
+  [ "ELSE" caseresult<out elval> (. val.elsevalue = elval .)]
+.
+
+simpleSwitch<out val>(.val, cases = None, [] .) =
+  valueLitteral<out val>
+  "WHEN" simpleCase<cases> { "WHEN" simpleCase<cases> }
+  (. val = ast.SimpleSwitch(val, cases) .)
+.
+
+simpleCase<cases> =
+  (
+     valueLitteral<out ifv>
+   | compareOperand<out ifv, None>
+  )
+  "THEN" caseresult<out thenv>
+  (. cases.append(ast.SimpleCase(ifv, thenv))  .)
+.
+
+
+searchedCase<out val> (. cases = [] .) =
+  "WHEN" searchCase<cases> { "WHEN" searchCase<cases> }
+  (. val = ast.SearchedSwitch(cases) .)
+.
+
+searchCase<cases> =
+  searchCondition<out v> "THEN" caseresult<out r>
+  (. cases.append(ast.SearchCase(v, r))  .)
+.
+
+caseresult<out val> (. val = None .) = 
+   valueLitteral<out val> 
+ | "NULL" 
+.
+
+
+Type<out val> =
+      ( "CHARACTER"
+    |   "CHAR"
+      )(. val = str .)
+    | ( "NUMERIC"
+    |   "DECIMAL"
+    |   "DEC"
+    |   "SMALLINT"
+    |   "INTEGER"
+    |   "INT"
+      )(. val = int .)
+    | ( "FLOAT"
+    |   "REAL"
+    |   "DOUBLE" "PRECISION"
+      ) (. val = float .)
+    | "BOOLEAN"     (. val = bool .)
+    |   "DATE"      (. val = "DATE" .)
+    |   "DATETIME"  (. val = "DATETIME" .)
+.
+
+valueExpr<out val> (. op = None .) =
+  term<out val>
+  {
+   ( '+'  | '-' | "||" ) (. op = self.token.val .)
+   term<out v2>
+   (. val = ast.BinaryExpr(op,val,v2) .)
+  }
+.
+
+term<out val> (. op = None .) =
+  factor<out val>
+  {
+   ('*'|'/'|'%') (. op = self.token.val .)
+   factor<out v2>
+   (. val = ast.BinaryExpr(op,val,v2) .)
+  }
+.
+
+factor<out val> = 
+  valueLitteral<out val>
+.
+
+Name<out id> =
+  Ident<out id>
+  { '.' Ident<out id1> (. id = '%s.%s' % (id,id1) .)
+  }
+  (. id = ast.Identifier(id) .)
+.
+
+Ident<out id> =
+    ident    (. id = self.getCasesensitiveTokenValue(self.token)     .)
+  | fixident (. id = self.getCasesensitiveTokenValue(self.token)[1:] .)
+.
+
+SQLParameter<out val> =
+ paramId (. val = self.context.addParam(self.getCasesensitiveTokenValue(self.token)[1:]) .)
+.
+
+
+Int<out val> =
+    integer (. val = int(self.token.val) .)
+.
+
+String<out val> =
+    string  (.val = self.getCasesensitiveTokenValue(self.token)[1:-1] .) 
+.
+
+BoolLiteral<out val> =
+   "TRUE"  (. val = True .)
+ | "FALSE" (. val = False .)
+.
+
+END sql.
