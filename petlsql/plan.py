@@ -49,13 +49,13 @@ def _(ast, **kwargs):
     lkey, rkey = ast.keys
     return dict(lkey=[str(k) for k in lkey], rkey=[str(k) for k in rkey])
 
+
 @plan.register(JoinCondition)
 def _(ast, **kwargs):
     if ast.keys:
         lkey, rkey = ast.keys
         return dict(lkey=[str(k) for k in lkey], rkey=[str(k) for k in rkey])
 
-# JoinCondition
 
 @plan.register(WhereAst)
 def _(ast, f, **kwargs):
@@ -70,42 +70,56 @@ def _(ast, f, **kwargs):
     f = partial(select_execute, f, **args)
     return f
 
+
 @plan.register(Columns)
 def _(ast, compiler, f, header, **kwargs):
     # if ast.deps:
-        # print("plan Columns:", ast.deps, header)
-    fields = OrderedDict()
-    tc = []
-    for c in ast:
-        # if c.done:
-        #     continue
-        v = c.value
-        if isinstance(v, Column):
-            # tec = v.name, v.alias
-            if c.id is not None:
-                tc.append(v)
-            v = v.name
-            # print(">>>?", tec, v)
+    #     print("plan Columns:", ast.deps, header)
+    fields = []
+    # tc = []
+    grouping = compiler.ast.groupby is not None
+    groups = []
+    for var in ast:
+        name = compiler.var_name(var)
+        v = var.value
+        if is_aggregate(v):
+            if grouping:
+                v = name
+            else:
+                groups.append((name, compile_ast(var.value, compiler)))
+                continue
+        elif isinstance(v, Column):
+            if var.id == v: # column without alias
+                name, v = v.column, name
+            else:
+                v = v.name
         else:
-            if not is_aggregate(v):
-                # print("c?:", v, c.done)
-                if c.name in header:
-                    v = c.name
-                else:
-                    v = compile_ast(v, compiler)
-        fields[c.name] = v
-    # print("cs?:", fields)
-    if fields:
-        f = partial(fieldmap_execute, f, fieldmap=fields)
-        for c in tc:
-            c.alias = None
-        # print("????", fields)
-    return f
+            v = compile_ast(v, compiler)
+        fields.append((name, v))
+    if groups:
+        if fields:
+            raise SQLError("Wrong select statement: combine aggregates with not aggregates")
+        header, fs = zip(*groups)
+        return partial(aggregate_execute, f, header=header, aggregates=fs)
+    elif fields:
+        keys, values = zip(*fields)
+        # print("cs:", keys, values, header)
+        if keys == values:
+            if set(keys) == header:
+                # print("as is:", f)
+                return f
+            else:
+                return partial(cut_execute, f, fields=keys)
+        # print("fields?:", fields, header)
+        header.clear()
+        header.update(keys)
+        return partial(fieldmap_execute, f, fieldmap=OrderedDict(fields))
 
 
 @plan.register(AllColumns)
 def _(ast, f, header, **kwargs):
     return f
+
 
 def _reducer(keys, rows, aggragates=[]):
     rec = list(keys)
@@ -135,50 +149,65 @@ def _(ast, f, compiler, **kwargs):
         keys.append(name)
         hs.append(name)
     for var in ast.vars:
-        name = var.id
-        if name is None:
-            name = compiler.new_var()
+        name = compiler.var_name(var)
         hs.append(name)
         val = compile_ast(var.value, compiler)
-        var.done = True
+        # var.done = True
         aggregates.append(val)
         # print("g var:", var, val)
     # print(aggregates, args)
     args['reducer'] = partial(_reducer, aggragates=aggregates)
+    #new header
+    header = kwargs['header']
+    header.clear()
+    header.update(hs)
+
     return partial(reducer_execute, f, **args)
 
 
 @plan.register(OrderBy)
-def _(ast, f, compiler, **kwargs):
+def _(ast, f, compiler, header, **kwargs):
     key = []
     args = dict(key=key, reverse=ast.desc)
     for k in ast.items:
-        name = k.name
+        if isinstance(k, Var):
+            name = compiler.var_name(k)
+        else:
+            name = str(k)
         # print("order:", type(k), k, k.name)
-        key.append(name)
+        if name in header:
+            key.append(name)
+        else:
+            print("h:", header)
+            raise SQLError("Order by unknown field {}".format(name))
+    # print("order:", key, header)
     return partial(sort_execute, f, **args)
-    return f
+    # return f
 
 
 def compile_vars(vars, compiler, header, **kwargs):
     fields = []
-    tc = []
+    # tc = []
     for var in vars:
-        name = var.name
+        name = compiler.var_name(var)
         if name in header:
-            # print(f"var {name} alredy exist")
             continue
         val = var.value
-        if isinstance(val, Column):
-            # tec = v.name, v.alias
-            if var.id is not None:
-                tc.append(val)
-            val = val.name
-            # print(">>>?", tec, v)
+        if var.id == var.value:
+            print("it's column and must be in header: {}".format(var))
+            # pass # it's column and must be in header
         else:
-            val = compile_ast(val, compiler)
-        fields.append((name, val))
-        header.add(name)
-    for c in tc:
-        c.alias = None
+            fields.append((name, compile_ast(val, compiler)))
+            header.add(name)
+        # if isinstance(val, Column):
+        #     # tec = v.name, v.alias
+        #     if var.id is not None:
+        #         tc.append(val)
+        #     val = val.name
+        #     # print(">>>?", tec, v)
+        # else:
+        #     val = compile_ast(val, compiler)
+        # fields.append((name, val))
+    # for var in tc:
+    #     var.alias = None
     return fields

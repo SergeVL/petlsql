@@ -273,13 +273,18 @@ def _(ast, compiler=None, **kwargs):
 def _(ast, **kwargs):
     arg = comp(ast.arg, **kwargs)
     funcname = ast.func.name
+    filter = comp(ast.selector, **kwargs) if ast.selector else ""
     if ast.distinct:
         funcname += "_DISTINCT"
-    filter = ""
-    if ast.selector:
-        filter = " if {}".format(comp(ast.selector, **kwargs))
-        # print("??:", type(ast.selector), ast.selector, filter)
-    src = "sqlib.{}([{} for rec in rows{}])".format(funcname, arg, filter)
+    if ast.arg is None and ast.func == Aggregate.COUNT:
+        if filter:
+            src = "len(list(filter(lambda rec: {}, rows)))".format(filter)
+        else:
+            src = "len(rows)"
+    else:
+        if filter:
+            filter = " if "+filter
+        src = "sqlib.{}([{} for rec in rows{}])".format(funcname, arg, filter)
     return compile_function(kwargs['compiler'], "r{}".format(id(ast)), src, arg='rows')
 
 

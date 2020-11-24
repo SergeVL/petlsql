@@ -51,9 +51,9 @@ def post_join(ast, aggregates, **kwargs):
             deps = []
             for k in ks:
                 if isinstance(k, Var):
-                    if not k.done:
-                        k.done = True
-                        deps.append(k)
+                    # if not k.done:
+                    #     k.done = True
+                    deps.append(k)
             if deps:
                 has = True
                 for item in deps:
@@ -100,6 +100,18 @@ def _(ast, compiler, collect, **kwargs):
     return r or ast
 
 
+@scan.register(Var)
+def _(ast, stop, **kwargs):
+    stop.post_proc = post_var
+    return ast
+
+
+def post_var(ast, aggregates, compiler, **kwargs):
+    if ast.id is None and isinstance(ast.value, Column):
+        ast.id = ast.value
+    return ast, aggregates
+
+
 @scan.register(WhereAst)
 def _(ast, stop, **kwargs):
     stop.post_proc = post_clause
@@ -110,9 +122,9 @@ def post_clause(ast, aggregates, **kwargs):
     deps = []
     for item in aggregates:
         if isinstance(item, Var):
-            if not item.done:
-                item.done = True
-                deps.append(item)
+            # if not item.done:
+            #     item.done = True
+            deps.append(item)
     if deps:
         for item in deps:
             aggregates.remove(item)
@@ -143,15 +155,10 @@ def post_group(ast, aggregates, compiler, **kwargs):
     if isinstance(cs, Columns):
         for v in cs:
             if is_aggregate(v.value):
-                v.done = True
+                # v.done = True
                 vars.append(v)
     ast.vars = vars
     return ast, aggregates
-
-
-@scan.register(Var)
-def _(ast, stop, **kwargs):
-    return ast
 
 
 class _StopException(Exception):

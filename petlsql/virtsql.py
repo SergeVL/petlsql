@@ -40,9 +40,11 @@ class Compiler:
         self.varcount = 0
         self.unknown_vars = set()
 
-    def new_var(self):
-        self.varcount += 1
-        return "c{}".format(self.varcount)
+    def var_name(self, var):
+        if var.id is None:
+            self.varcount += 1
+            var.id = "c{}".format(self.varcount)
+        return str(var.id)
 
     @property
     def module(self):
@@ -90,12 +92,11 @@ class Compiler:
             # print("f2:", f)
         if ast.groupby:
             f = plan(ast.groupby, f=f, **kwargs)
-        else:
-            f = plan(ast.columns, f=f, **kwargs)
+        f = plan(ast.columns, f=f, **kwargs)
         if ast.orders:
             f = plan(ast.orders, f=f, **kwargs)
         if ast.distinct:
-            f = partial(unique_execute, f)
+            f = partial(distinct_execute, f)
         r = ast.view = View('', f)
         return r
 

@@ -55,6 +55,11 @@ def fieldmap_execute(c, fieldmap={}, **kwargs):
     return r
 
 
+def cut_execute(c, fields=[], **kwargs):
+    # print("cut:", fields)
+    return etl.cut(c(), *fields)
+
+
 def select_execute(c, selector, **kwargs):
     r = c()
     if 'addfields' in kwargs:
@@ -70,11 +75,20 @@ def reducer_execute(c, **kwargs):
     kwargs = filter_keys(kwargs, ("key", "reducer", "header"))
     return etl.rowreduce(r, **kwargs)
 
+def _global_reducer(rows, aggragates=[]):
+    return [f(rows) for f in aggragates]
+
+
+def aggregate_execute(c, header, aggregates, **kwargs):
+    rows = list(iter(etl.namedtuples(c())))
+    data =[f(rows) for f in aggregates]
+    return etl.wrap([header, data])
+
 def sort_execute(c, **kwargs):
     r = c()
     kwargs = filter_keys(kwargs, ("key", "reverse"))
     r = etl.sort(r, **kwargs)
     return r
 
-def unique_execute(c):
-    return etl.unique(c())
+def distinct_execute(c, **kwargs):
+    return etl.distinct(c())

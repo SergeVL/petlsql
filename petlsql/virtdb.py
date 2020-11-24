@@ -195,6 +195,32 @@ class VirtualDB:
         except SQLError as e:
             print(e)
 
+    def print_all(self, sql, title=None):
+        try:
+            if isinstance(sql, str):
+                sql = execute(sql, self)
+            if isinstance(title, str):
+                print(title)
+            print(etl.lookall(sql))
+        except SQLError as e:
+            print(e)
+
+    def iter(self, sql):
+        try:
+            if isinstance(sql, str):
+                sql = execute(sql, self)
+            return iter(etl.namedtuples(sql))
+        except SQLError as e:
+            print(e)
+
+    def one_record(self, sql):
+        try:
+            if isinstance(sql, str):
+                sql = execute(sql, self)
+            return next(iter(etl.namedtuples(sql)))
+        except SQLError as e:
+            print(e)
+
     def load(self, sql, target, append=False, **kwargs):
         try:
             if isinstance(sql, str):

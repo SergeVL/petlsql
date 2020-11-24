@@ -133,11 +133,13 @@ class Var:
     def __init__(self, id, value):
         self.id = id
         self.value = value
-        self.done = False
 
     @property
     def name(self):
-        return self.id or str(self.value)
+        r = self.id
+        if r is None:
+            if isinstance(self.value, (Column, Identifier)):
+                return str(self.value)
 
     def __str__(self):
         r = str(self.value)
@@ -163,6 +165,9 @@ class Columns:
 
     def append(self, c):
         self.columns.append(c)
+
+    def remove(self, c):
+        self.columns.remove(c)
 
     def get_sql_var(self, name):
         for v in self.columns:
