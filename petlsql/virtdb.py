@@ -205,11 +205,19 @@ class VirtualDB:
         except SQLError as e:
             print(e)
 
-    def iter(self, sql):
+    def dicts(self, sql):
         try:
             if isinstance(sql, str):
                 sql = execute(sql, self)
-            return iter(etl.namedtuples(sql))
+            return etl.dicts(sql)
+        except SQLError as e:
+            print(e)
+
+    def namedtuples(self, sql):
+        try:
+            if isinstance(sql, str):
+                sql = execute(sql, self)
+            return etl.namedtuples(sql)
         except SQLError as e:
             print(e)
 

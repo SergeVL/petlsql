@@ -93,7 +93,7 @@ selectItem
    valueLitteral<out val>
  | aggregateFunction<out val>
  )
- ["AS" (Ident<out id> | String<out id>) ]
+ ["AS" NameOrStr<out id> ]
  (. self.context.addColumn(id, val) .)
 .
 
@@ -285,9 +285,14 @@ compareExpr<out val,arg> (. op = '==' .) =
 .
 
 nameList<out val> (. val = [] .) =
-  Name<out id>       (. val.append(id) .)
-  { ',' Name<out id> (. val.append(id) .)
+  NameOrStr<out id>       (. val.append(id) .)
+  { ',' NameOrStr<out id> (. val.append(id) .)
   }
+.
+
+NameOrStr<out id> =
+   Ident<out id>
+ | String<out id>
 .
 
 groupList =

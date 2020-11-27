@@ -54,6 +54,12 @@ class PyVar:
         self.val = val
         self.code = code
 
+    def __repr__(self):
+        return "PyVar<{} as {}>".format(self.code, self.val)
+
+    def __str__(self):
+        return self.val
+
 
 class Column:
     def __init__(self, tbl, column, alias=None):
@@ -139,7 +145,8 @@ class Var:
         r = self.id
         if r is None:
             if isinstance(self.value, (Column, Identifier)):
-                return str(self.value)
+                r = str(self.value)
+        return r
 
     def __str__(self):
         r = str(self.value)

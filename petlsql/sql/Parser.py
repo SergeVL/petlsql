@@ -356,12 +356,7 @@ class Parser( object ):
          self.SynErr(109)
       if (self.la.kind == 8):
          self.Get( )
-         if self.la.kind == 1 or self.la.kind == 2:
-            id = self.Ident()
-         elif self.la.kind == 6:
-            id = self.String()
-         else:
-            self.SynErr(110)
+         id = self.NameOrStr()
       self.context.addColumn(id, val) 
 
    def valueLitteral( self ):
@@ -387,7 +382,7 @@ class Parser( object ):
             self.Get( )
             val = float(self.token.val) 
          else:
-            self.SynErr(111)
+            self.SynErr(110)
          val = sign * val 
       elif self.la.kind == 6:
          val = self.String()
@@ -407,12 +402,12 @@ class Parser( object ):
             val = self.valueExpr()
             val = ast.BracesExpr(val) 
          else:
-            self.SynErr(112)
+            self.SynErr(111)
          self.Expect(10)
       elif self.la.kind == 3:
          val = self.SQLParameter()
       else:
-         self.SynErr(113)
+         self.SynErr(112)
       return val
 
    def aggregateFunction( self ):
@@ -428,7 +423,7 @@ class Parser( object ):
                d = self.setQuantifier()
             val = self.valueLitteral()
          else:
-            self.SynErr(114)
+            self.SynErr(113)
          self.Expect(10)
       elif self.StartOf(10):
          if self.la.kind == 22:
@@ -457,17 +452,21 @@ class Parser( object ):
          val = self.valueList()
          self.Expect(10)
       else:
-         self.SynErr(115)
+         self.SynErr(114)
       val = ast.AggregateFunc(f, d, val) 
       if (self.la.kind == 27):
          cond = self.filterClause()
          val.selector = cond 
       return val
 
-   def String( self ):
-      self.Expect(6)
-      val = self.getCasesensitiveTokenValue(self.token)[1:-1] 
-      return val
+   def NameOrStr( self ):
+      if self.la.kind == 1 or self.la.kind == 2:
+         id = self.Ident()
+      elif self.la.kind == 6:
+         id = self.String()
+      else:
+         self.SynErr(115)
+      return id
 
    def valueList( self ):
       val = self.valueLitteral()
@@ -527,6 +526,11 @@ class Parser( object ):
          id = self.Name()
          val.append(id) 
 
+      return val
+
+   def String( self ):
+      self.Expect(6)
+      val = self.getCasesensitiveTokenValue(self.token)[1:-1] 
       return val
 
    def boolTerm( self ):
@@ -705,11 +709,11 @@ class Parser( object ):
 
    def nameList( self ):
       val = [] 
-      id = self.Name()
+      id = self.NameOrStr()
       val.append(id) 
       while self.la.kind == 11:
          self.Get( )
-         id = self.Name()
+         id = self.NameOrStr()
          val.append(id) 
 
       return val
@@ -1126,12 +1130,12 @@ class Parser( object ):
       107 : "invalid setQuantifier",
       108 : "invalid tableRefList",
       109 : "invalid selectItem",
-      110 : "invalid selectItem",
+      110 : "invalid valueLitteral",
       111 : "invalid valueLitteral",
       112 : "invalid valueLitteral",
-      113 : "invalid valueLitteral",
+      113 : "invalid aggregateFunction",
       114 : "invalid aggregateFunction",
-      115 : "invalid aggregateFunction",
+      115 : "invalid NameOrStr",
       116 : "invalid tableReference",
       117 : "invalid joinSpecification",
       118 : "invalid compareOperand",

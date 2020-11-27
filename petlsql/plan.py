@@ -29,9 +29,10 @@ def _(ast, db, header, **kwargs):
 
 @plan.register(JoinCursor)
 def _(ast, **kwargs):
+    c1, c2 = plan(ast.source1, **kwargs), plan(ast.source2, **kwargs)
     args = {}
     if ast.deps:
-        print("plan JoinCursor:", ast.deps)
+        # print("plan JoinCursor:", ast.deps, kwargs["header"])
         ldeps, rdeps = ast.deps
         lvars = compile_vars(ldeps, **kwargs)
         if lvars:
@@ -41,20 +42,21 @@ def _(ast, **kwargs):
             args['addRfields'] = rvars
     if ast.jointype != Join.UNION:
         args.update(plan(ast.join, **kwargs))
-    return partial(join_execute, plan(ast.source1, **kwargs), plan(ast.source2, **kwargs), ast.jointype, **args)
+    # print ("join:", args, kwargs["header"])
+    return partial(join_execute, c1, c2, ast.jointype, **args)
 
 
 @plan.register(JoinUsing)
 def _(ast, **kwargs):
     lkey, rkey = ast.keys
-    return dict(lkey=[str(k) for k in lkey], rkey=[str(k) for k in rkey])
+    return dict(lkey=[k.name for k in lkey], rkey=[k.name for k in rkey])
 
 
 @plan.register(JoinCondition)
 def _(ast, **kwargs):
     if ast.keys:
         lkey, rkey = ast.keys
-        return dict(lkey=[str(k) for k in lkey], rkey=[str(k) for k in rkey])
+        return dict(lkey=[k.name for k in lkey], rkey=[k.name for k in rkey])
 
 
 @plan.register(WhereAst)
@@ -76,30 +78,33 @@ def _(ast, compiler, f, header, **kwargs):
     # if ast.deps:
     #     print("plan Columns:", ast.deps, header)
     fields = []
-    # tc = []
     grouping = compiler.ast.groupby is not None
     groups = []
     for var in ast:
         name = compiler.var_name(var)
-        v = var.value
-        if is_aggregate(v):
-            if grouping:
-                v = name
-            else:
-                groups.append((name, compile_ast(var.value, compiler)))
-                continue
-        elif isinstance(v, Column):
-            if var.id == v: # column without alias
-                name, v = v.column, name
-            else:
-                v = v.name
+        if name in header:
+            v = name
         else:
-            v = compile_ast(v, compiler)
+            v = var.value
+            if is_aggregate(v):
+                if grouping:
+                    v = name
+                else:
+                    groups.append((name, compile_ast(var.value, compiler)))
+                    continue
+            elif isinstance(v, Column):
+                if var.id == v: # column without alias
+                    name, v = v.column, name
+                else:
+                    v = v.name
+            else:
+                v = compile_ast(v, compiler)
         fields.append((name, v))
     if groups:
         if fields:
             raise SQLError("Wrong select statement: combine aggregates with not aggregates")
         header, fs = zip(*groups)
+        # print("cs:", header, fs)
         return partial(aggregate_execute, f, header=header, aggregates=fs)
     elif fields:
         keys, values = zip(*fields)
@@ -113,8 +118,10 @@ def _(ast, compiler, f, header, **kwargs):
         # print("fields?:", fields, header)
         header.clear()
         header.update(keys)
+        # print("cs1:", fields)
         return partial(fieldmap_execute, f, fieldmap=OrderedDict(fields))
-
+    else:
+        return f
 
 @plan.register(AllColumns)
 def _(ast, f, header, **kwargs):
@@ -122,7 +129,12 @@ def _(ast, f, header, **kwargs):
 
 
 def _reducer(keys, rows, aggragates=[]):
-    rec = list(keys)
+    if not isinstance(keys, (tuple, list)):
+        keys = [keys]
+    else:
+        keys = list(keys)
+    # print("reduc:", keys, type(keys))
+    rec = keys
     rows = list(rows)
     for f in aggragates:
         try:
@@ -130,12 +142,13 @@ def _reducer(keys, rows, aggragates=[]):
         except:
             val = None
         rec.append(val)
+    # print("reduc1:", rec)
     return rec
 
 
 @plan.register(GroupBy)
 def _(ast, f, compiler, **kwargs):
-    # print("plan GroupBy:", ast.deps, ast.vars)
+    # print("plan GroupBy:", ast.deps, ast.keys, kwargs.get('header'))
     keys = []
     hs = []
     aggregates = []
@@ -144,8 +157,12 @@ def _(ast, f, compiler, **kwargs):
         vs = compile_vars(ast.deps, compiler, **kwargs)
         if vs:
             args['addfields'] = vs
+    # print("plan1 GroupBy:", list(map(type,ast.keys)), kwargs.get('header'))
     for var in ast.keys:
-        name = var.name
+        if isinstance(var, str):
+            name = var
+        else:
+            name = var.name
         keys.append(name)
         hs.append(name)
     for var in ast.vars:
@@ -155,7 +172,7 @@ def _(ast, f, compiler, **kwargs):
         # var.done = True
         aggregates.append(val)
         # print("g var:", var, val)
-    # print(aggregates, args)
+    # print("group by:", args, aggregates)
     args['reducer'] = partial(_reducer, aggragates=aggregates)
     #new header
     header = kwargs['header']
@@ -178,7 +195,7 @@ def _(ast, f, compiler, header, **kwargs):
         if name in header:
             key.append(name)
         else:
-            print("h:", header)
+            print("h:", k, header)
             raise SQLError("Order by unknown field {}".format(name))
     # print("order:", key, header)
     return partial(sort_execute, f, **args)
