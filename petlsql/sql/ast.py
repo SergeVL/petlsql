@@ -76,7 +76,10 @@ class Column:
             self.alias = "{}_{}".format(self.table.name, self.column)
 
     def __repr__(self):
-        return "Column<{}.{} as {}>".format(self.table, self.column, self.alias)
+        suffix = ""
+        if self.alias:
+            suffix = " as "+self.alias
+        return "Column<{}.{}{}>".format(self.table, self.column, suffix)
 
     def __str__(self):
         return self.name
@@ -162,6 +165,8 @@ class AllColumns:
     def __str__(self):
         return "*"
 
+    def remove(self, var):
+        pass
 
 class Columns:
     _fields = ("columns", )
@@ -174,10 +179,14 @@ class Columns:
         self.columns.append(c)
 
     def remove(self, c):
-        self.columns.remove(c)
+        try:
+            self.columns.remove(c)
+        except:
+            pass
 
     def get_sql_var(self, name):
         for v in self.columns:
+            # print("get_sql_var:", v.id, name)
             if v.id == name:
                 return v
 
@@ -225,7 +234,7 @@ class WithContext:
 
 
 class SelectAst:
-    _fields = ("source", "selector", "columns", "groupby", "orders", "params")
+    _fields = ("source", "selector", "groupby", "columns", "orders", "params")
     
     def __init__(self):
         self.parent = None
@@ -522,6 +531,7 @@ def is_aggregate(ast):
                 and issubclass(ast.id.code, Aggregator))
     except:
         return False
+
 
 class _Stopper:
     __slots__ = ('stop', 'follow', 'post_proc')

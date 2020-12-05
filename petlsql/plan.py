@@ -62,19 +62,22 @@ def _(ast, **kwargs):
 @plan.register(WhereAst)
 def _(ast, f, **kwargs):
     fselect = compile_ast(ast, **kwargs)
+    # print("select:", fselect)
     args = dict(selector=fselect)
     if ast.deps:
         # print("plan Where:", ast.deps)
         vs = compile_vars(ast.deps, **kwargs)
         if vs:
             args['addfields'] = vs
-        # print("sel:", vs, ast.deps, kwargs['header'])
+    # print("sel:", args, kwargs['header'])
     f = partial(select_execute, f, **args)
     return f
 
 
 @plan.register(Columns)
-def _(ast, compiler, f, header, **kwargs):
+def _(ast, f, **kwargs):
+    compiler = kwargs['compiler']
+    header = kwargs['header']
     # if ast.deps:
     #     print("plan Columns:", ast.deps, header)
     fields = []
@@ -90,15 +93,18 @@ def _(ast, compiler, f, header, **kwargs):
                 if grouping:
                     v = name
                 else:
-                    groups.append((name, compile_ast(var.value, compiler)))
+                    groups.append((name, compile_ast(var.value, **kwargs)))
                     continue
-            elif isinstance(v, Column):
-                if var.id == v: # column without alias
-                    name, v = v.column, name
-                else:
-                    v = v.name
             else:
-                v = compile_ast(v, compiler)
+                if grouping:
+                    continue
+                elif isinstance(v, Column):
+                    if var.id == v: # column without alias
+                        name, v = v.column, name
+                    else:
+                        v = v.name
+                else:
+                    v = compile_ast(v, **kwargs)
         fields.append((name, v))
     if groups:
         if fields:
@@ -122,6 +128,7 @@ def _(ast, compiler, f, header, **kwargs):
         return partial(fieldmap_execute, f, fieldmap=OrderedDict(fields))
     else:
         return f
+
 
 @plan.register(AllColumns)
 def _(ast, f, header, **kwargs):
@@ -147,17 +154,19 @@ def _reducer(keys, rows, aggragates=[]):
 
 
 @plan.register(GroupBy)
-def _(ast, f, compiler, **kwargs):
-    # print("plan GroupBy:", ast.deps, ast.keys, kwargs.get('header'))
+def _(ast, f, **kwargs):
+    compiler = kwargs['compiler']
+    header = kwargs['header']
+    # print("plan GroupBy:", ast.deps, ast.keys, header)
     keys = []
     hs = []
     aggregates = []
     args = dict(key=keys, header=hs)
     if ast.deps:
         vs = compile_vars(ast.deps, compiler, **kwargs)
-        if vs:
-            args['addfields'] = vs
-    # print("plan1 GroupBy:", list(map(type,ast.keys)), kwargs.get('header'))
+    else:
+        vs = []
+        # print("plan deps GroupBy:", kwargs.get('header'))
     for var in ast.keys:
         if isinstance(var, str):
             name = var
@@ -165,10 +174,19 @@ def _(ast, f, compiler, **kwargs):
             name = var.name
         keys.append(name)
         hs.append(name)
+        if name not in header:
+            v = compiler.find_sql_var(name)
+            if v is not None:
+               v = compile_ast(v, **kwargs)
+               vs.append((name, v))
+    if vs:
+        args['addfields'] = vs
+    # print("group by vars:", ast.vars)
+    cs = compiler.ast.columns
     for var in ast.vars:
         name = compiler.var_name(var)
         hs.append(name)
-        val = compile_ast(var.value, compiler)
+        val = compile_ast(var.value, **kwargs)
         # var.done = True
         aggregates.append(val)
         # print("g var:", var, val)
@@ -178,28 +196,36 @@ def _(ast, f, compiler, **kwargs):
     header = kwargs['header']
     header.clear()
     header.update(hs)
-
+    # print("group by:", args)
     return partial(reducer_execute, f, **args)
 
 
 @plan.register(OrderBy)
-def _(ast, f, compiler, header, **kwargs):
+def _(ast, f, **kwargs):
     key = []
+    vs = []
+    compiler = kwargs['compiler']
+    header = kwargs['header']
     args = dict(key=key, reverse=ast.desc)
-    for k in ast.items:
-        if isinstance(k, Var):
-            name = compiler.var_name(k)
+    for var in ast.items:
+        if isinstance(var, str):
+            name = var
         else:
-            name = str(k)
-        # print("order:", type(k), k, k.name)
-        if name in header:
-            key.append(name)
-        else:
-            print("h:", k, header)
-            raise SQLError("Order by unknown field {}".format(name))
-    # print("order:", key, header)
+            name = var.name
+        # print("order:", type(var), var, name)
+        if name not in header:
+            v = compiler.find_sql_var(name)
+            if v is not None:
+                v = compile_ast(v, **kwargs)
+                vs.append((name, v))
+            else:
+                # print("h:", var, header)
+                raise SQLError("Order by unknown field {}".format(name))
+        key.append(name)
+        if vs:
+            args['addfields'] = vs
+    # print("order by:", args)
     return partial(sort_execute, f, **args)
-    # return f
 
 
 def compile_vars(vars, compiler, header, **kwargs):
@@ -214,7 +240,7 @@ def compile_vars(vars, compiler, header, **kwargs):
             print("it's column and must be in header: {}".format(var))
             # pass # it's column and must be in header
         else:
-            fields.append((name, compile_ast(val, compiler)))
+            fields.append((name, compile_ast(val, compiler=compiler, header=header, **kwargs)))
             header.add(name)
         # if isinstance(val, Column):
         #     # tec = v.name, v.alias

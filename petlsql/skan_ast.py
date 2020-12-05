@@ -13,8 +13,9 @@ def scan(ast, *args, **kwargs):
 
 
 @scan.register(SelectAst)
-def _(ast, compiler, set_ctx, **kwargs):
+def _(ast, compiler, set_ctx, stop, **kwargs):
     # print("select:", ast)
+    stop.follow = ("source", "columns", "selector", "groupby", "orders", "params")
     if compiler.ast != ast:
         cls = type(compiler)
         c = cls(compiler.db, parent=compiler)
@@ -101,7 +102,7 @@ def _(ast, compiler, collect, **kwargs):
 
 
 @scan.register(Var)
-def _(ast, stop, **kwargs):
+def _(ast, stop, collect, **kwargs):
     stop.post_proc = post_var
     return ast
 
@@ -118,7 +119,7 @@ def _(ast, stop, **kwargs):
 
 
 def post_clause(ast, aggregates, **kwargs):
-    # print("post:", ast, aggregates)
+    # print("post:", type(ast), ast, "/aggregates:", aggregates)
     deps = []
     for item in aggregates:
         if isinstance(item, Var):
@@ -136,11 +137,13 @@ def post_clause(ast, aggregates, **kwargs):
 def _(ast, stop, **kwargs):
     stop.post_proc = post_clause
 
+
 @scan.register(AllColumns)
 def _(ast, compiler, **kwargs):
     # print("*")
     for tbl in compiler.tables:
         tbl.use_all()
+
 
 @scan.register(GroupBy)
 def _(ast, stop, **kwargs):

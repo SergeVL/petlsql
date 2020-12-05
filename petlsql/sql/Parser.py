@@ -460,6 +460,7 @@ class Parser( object ):
       return val
 
    def NameOrStr( self ):
+      id = None 
       if self.la.kind == 1 or self.la.kind == 2:
          id = self.Ident()
       elif self.la.kind == 6:
@@ -654,7 +655,7 @@ class Parser( object ):
       return val
 
    def compareExpr( self, arg ):
-      op = '==' 
+      val, op = None, '==' 
       if self.la.kind == 54:
          self.Get( )
       elif self.StartOf(15):

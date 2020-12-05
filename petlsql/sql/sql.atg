@@ -267,7 +267,7 @@ inExpr<out val,arg, is_true> =
 .
 selectColumnList = sqlselect<out val> .
 
-compareExpr<out val,arg> (. op = '==' .) = 
+compareExpr<out val,arg> (. val, op = None, '==' .) =
   (
     '='
     |('<'|'>'|"<="|">=") (. op = self.token.val .)
@@ -290,7 +290,7 @@ nameList<out val> (. val = [] .) =
   }
 .
 
-NameOrStr<out id> =
+NameOrStr<out id> (. id = None .) =
    Ident<out id>
  | String<out id>
 .

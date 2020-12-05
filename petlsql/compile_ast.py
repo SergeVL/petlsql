@@ -1,6 +1,4 @@
 from functools import singledispatch
-# from functools import partial
-# from .run import *
 from .sql.ast import *
 import re
 
@@ -22,7 +20,7 @@ def {}({}):
 
 
 def compile_ast(ast, compiler, **kwargs):
-    r = comp(ast, compiler=compiler)
+    r = comp(ast, compiler=compiler, **kwargs)
     if isinstance(r, Expression):
         r = compile_function(compiler, "f{}".format(id(ast)), r)
     return r
@@ -54,7 +52,7 @@ def _(ast, **kwargs):
 @comp.register(ConditionExpr)
 def _(ast, **kwargs):
     delimeter = " {} ".format(ast.op)
-    return delimeter.join([comp(arg, **kwargs) for arg in ast.args])
+    return Expression(delimeter.join([comp(arg, **kwargs) for arg in ast.args]))
 
 
 @comp.register(Negation)
@@ -116,7 +114,6 @@ def _(ast, **kwargs):
     prefix = "" if ast.is_true else "NOT"
     return Expression('sqlib.{}IN({},{})'.format(prefix, arg, ', '.join(values)))
 
-
 @comp.register(ContainingExpr)
 def _(ast, **kwargs):
     arg = comp(ast.arg, **kwargs)
@@ -135,10 +132,12 @@ def _(ast, **kwargs):
     prefix = "" if ast.is_true else "NOT"
     return Expression('sqlib.{}DISTINCTFROM({})'.format(prefix, ', '.join(args)))
 
+
 @comp.register(BracesExpr)
 def _(ast, **kwargs):
     arg = comp(ast.arg, **kwargs)
     return Expression('({})'.format(arg))
+
 
 @comp.register(SimpleSwitch)
 def _(ast, **kwargs):
@@ -291,4 +290,4 @@ def _(ast, **kwargs):
 @comp.register(list)
 def _(ast, **kwargs):
     r = [comp(x, **kwargs) for x in ast]
-    return Expression('[{}]'.format(', '.join(r)))
+    return Expression('({})'.format(', '.join(r)))

@@ -68,12 +68,14 @@ def select_execute(c, selector, **kwargs):
         r = etl.select(r, selector)
     return r
 
+
 def reducer_execute(c, **kwargs):
     r = c()
     if 'addfields' in kwargs:
         r = etl.addfields(r, kwargs['addfields'])
     kwargs = filter_keys(kwargs, ("key", "reducer", "header"))
     return etl.rowreduce(r, **kwargs)
+
 
 def _global_reducer(rows, aggragates=[]):
     return [f(rows) for f in aggragates]
@@ -84,11 +86,15 @@ def aggregate_execute(c, header, aggregates, **kwargs):
     data =[f(rows) for f in aggregates]
     return etl.wrap([header, data])
 
+
 def sort_execute(c, **kwargs):
     r = c()
+    if 'addfields' in kwargs:
+        r = etl.addfields(r, kwargs['addfields'])
     kwargs = filter_keys(kwargs, ("key", "reverse"))
     r = etl.sort(r, **kwargs)
     return r
+
 
 def distinct_execute(c, **kwargs):
     return etl.distinct(c())

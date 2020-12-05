@@ -9,7 +9,6 @@ from .run import *
 from .skan_ast import skan_ast
 from .plan import plan
 
-
 def parse_sql(sqlstr, sqlid=''):
     scanner = Scanner.Scanner(sqlstr)
     parser = Parser.Parser(sqlid)
@@ -65,6 +64,7 @@ class Compiler:
             var = self.db.find_var(name)
         if var is None:
             var = self.find_sql_var(name)
+        # print("find_sql_var:", name, var)
         if var is None:
             raise NotFound("Var {} not found".format(name))
         return var
@@ -92,9 +92,9 @@ class Compiler:
             # print("f2:", f)
         if ast.groupby:
             f = plan(ast.groupby, f=f, **kwargs)
-        f = plan(ast.columns, f=f, **kwargs)
         if ast.orders:
             f = plan(ast.orders, f=f, **kwargs)
+        f = plan(ast.columns, f=f, **kwargs)
         if ast.distinct:
             f = partial(distinct_execute, f)
         r = ast.view = View('', f)
